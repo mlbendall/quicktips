@@ -1,0 +1,99 @@
+---
+title: "Apply dendrogram labels (in cummeRbund)"
+author: "Matthew L Bendall"
+date: "September 12, 2016"
+output: github_document
+always_allow_html: yes
+---
+
+```{r setup, include=FALSE}
+library(cummeRbund)
+library(knitr)
+library(DT)
+
+options(digits=6)
+knit_hooks$set(inline = function(x) {prettyNum(x, big.mark=",")})
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+### Load cummeRbund data
+
+```{r load-data}
+# Use CummeRbund to load data from cuffdiff output
+# This takes awhile the first time around, but is faster on subsequent loads
+cuff <- readCufflinks('/Users/bendall/Projects/asthma/results20160218/cuffdiff',
+                      genome="hg38")
+cuff
+```
+
+### Take a look at the replicate-level data
+
+```{r}
+DT::datatable(replicates(cuff), 
+              options=list(searching=FALSE, scrollX=TRUE))
+```
+
+### Plot the dendrogram
+
+```{r}
+dend.rep <- csDendro(genes(cuff), replicates=T)
+```
+
+As you can see here, the tips of the resulting dendrogram have useless names.
+Plus, these names are not stable across analyses with different groupings or
+numbers of samples.
+
+### Set up vector with desired names
+
+Create a named vector where the values are the desired names, and the names are
+the labels used in the above dendrogram. In this case, the files used in the
+analysis were named with the patient ID, so we can extract the patient IDs from
+the `file` column.
+
+```{r}
+# goodnames (in the same order as the table):
+goodnames <- gsub('/lustre/groups/cbi/asthma/host/hg38/', '', replicates(cuff)$file)
+goodnames <- gsub('/abundances.cxb', '', goodnames)
+
+# give the vector names using the rep_name column
+names(goodnames) <- replicates(cuff)$rep_name
+goodnames
+```
+
+Check that the new vector matches the `replicates(cuff)` table.
+
+### Relabel dendrogram
+
+Set the labels in the new dendrogram to desired labels. The `labels` function
+is in the `dendextend` package (install using `install.packages("dendextend")`)
+
+```{r}
+newdend <- dend.rep
+dendextend::labels(newdend) <- goodnames[labels(newdend)]
+plot(newdend)
+```
+
+### Alternate approach using ggdendro
+
+You can make more elaborate plots using the ggdendro package. This allows you to
+work with the dendrogram like a ggplot object.
+
+```{r}
+library(ggplot2)
+library(ggdendro) # Loads `ggendro::dendro_data` as `dendro_data`
+
+# Convert to dendro data object
+ggd <- ggdendro::dendro_data(dend.rep)
+# Set up data.frame with the other variables
+dvars <- replicates(cuff)
+rownames(dvars) <- dvars$rep_name
+# Reorder data.frame (same order as ggd)
+dvars <- dvars[as.character(ggd$labels$label),]
+# Add the good names to data.frame
+dvars$goodname <- goodnames[rownames(dvars)]
+
+ggdendrogram(ggd, rotate=T) + 
+        geom_text(data=ggd$labels, aes(x, y-0.05, label=dvars$goodname, color=dvars$sample_name)) +
+        coord_flip() + scale_y_reverse() + theme_dendro() + theme(legend.position="none")
+
+```
