@@ -37,3 +37,22 @@ module load sra
 module load parallel
 parallel fastq-dump --split-files -F --defline-qual '+' --gzip -O {//} {} ::: */*.sra
 ```
+
+## Convert FASTQ to FASTA
+
+Save this as a file, for example `inlineFastqToFasta.pl`.
+
+```bash
+#! /usr/bin/perl
+##########################################################################################
+# Convert fastq file on STDIN to fasta file on STDOUT
+# Assumes fastq file is well-formed.
+##########################################################################################
+while(<>) {s/^@/>/; print "$_" if ($.-1) % 4 < 2 }
+```
+
+Use linux pipes to convert the file:
+
+```bash
+cat reads.fastq | perl inlineFastqToFasta.pl > reads.fasta
+```
